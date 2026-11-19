@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`squash_pending` on jobs**: when `true`, a new build cancels the job's older pending builds, so a job with a frequent trigger and a long run (e.g. `cron` every minute) does not pile up a queue; running builds are kept.
 
+### Fixed
+
+- **Updating a public pipeline made it private again**: a config update (`pipelines update` without `--public`, or the server's `--pipeline-config` reconcile at every start) now keeps the pipeline's visibility; only `--public` changes it. ([#729](https://github.com/PikoCI/pikoci/pull/729))
+
 ## [0.8.0] - 2026-10-25
 
 ### Added
