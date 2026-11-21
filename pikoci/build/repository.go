@@ -67,6 +67,11 @@ type Repository interface {
 	// waiting_for_approval that have an ID less than beforeBuildID.
 	FindActiveBuilds(ctx context.Context, tc, pn, jn string, beforeBuildID uint32) ([]*Build, error)
 
+	// DeleteOldFinished deletes the builds of the given job that are older than its
+	// newest keep builds, except started, pending and waiting_for_approval ones.
+	// It returns the number of deleted builds.
+	DeleteOldFinished(ctx context.Context, tc, pn, jn string, keep int) (int64, error)
+
 	// CreateApproval records an approve or reject vote for a build.
 	CreateApproval(ctx context.Context, buildID uint32, username, action, message string) error
 	// FindApprovals returns all approval/rejection votes for a build.

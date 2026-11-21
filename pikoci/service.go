@@ -397,6 +397,10 @@ type PikoCI struct {
 	// check_interval. New sets it to scheduler.DefaultCheckInterval.
 	DefaultCheckInterval string
 
+	// KeepBuilds is how many builds each job keeps; older finished builds are
+	// deleted when a new one is created. Zero keeps every build.
+	KeepBuilds int
+
 	// GRPCServer is set by the server command to enable cancellation routing
 	// via gRPC streams. It is nil when no gRPC server is running.
 	GRPCServer interface {

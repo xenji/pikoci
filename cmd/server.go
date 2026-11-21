@@ -221,6 +221,9 @@ var serverCmd = &cobra.Command{
 		if err := validateDefaultCheckInterval(cfg.DefaultCheckInterval); err != nil {
 			return err
 		}
+		if cfg.KeepBuilds < 0 {
+			return fmt.Errorf("invalid --keep-builds value %d: must be 0 or more", cfg.KeepBuilds)
+		}
 
 		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: parseSlogLevel(cfg.LogLevel)}))
 		logger = logger.With("service", "pikoci")
@@ -320,6 +323,7 @@ var serverCmd = &cobra.Command{
 		if cfg.DefaultCheckInterval != "" {
 			svc.DefaultCheckInterval = cfg.DefaultCheckInterval
 		}
+		svc.KeepBuilds = cfg.KeepBuilds
 
 		// Recover builds orphaned by a previous crash or unclean shutdown.
 		if n, err := svc.RecoverOrphanedBuilds(ctx); err != nil {
@@ -608,6 +612,7 @@ func init() {
 	serverCmd.Flags().String("external-url", "", "External URL for OAuth callbacks (e.g. https://ci.pikoci.com)")
 	serverCmd.Flags().String("session-lifetime", "0", "Maximum session duration before re-login is required (e.g. 24h, 7d, 30d). 0 means sessions never expire")
 	serverCmd.Flags().String("default-check-interval", scheduler.DefaultCheckInterval, "Check schedule for resources with no check_interval (cron syntax or '@every <duration>', e.g. '@every 6h')")
+	serverCmd.Flags().Int("keep-builds", 0, "Number of builds each job keeps; older finished builds are deleted when a new one is created. 0 keeps every build")
 	serverCmd.Flags().String("team-canonical", mainTeamCanonical, "Team Canonical to scope the action")
 	serverCmd.Flags().String("pipeline-config", "", "Path to the Pipeline config file")
 	serverCmd.Flags().StringP("vars", "v", "", "Path to the Pipeline var file (JSON)")

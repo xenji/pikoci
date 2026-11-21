@@ -1097,3 +1097,72 @@ func TestLatestBuildStatusByPipeline(t *testing.T) {
 		assert.Len(t, result["build"], 3)
 	})
 }
+
+func TestDeleteOldFinished(t *testing.T) {
+	db := setupTestDB(t)
+	ctx := context.Background()
+
+	res, err := db.ExecContext(ctx, `INSERT INTO pipelines (team_id, name, canonical) VALUES (1, 'keep-pipe', 'keep-pipe')`)
+	require.NoError(t, err)
+	ppID, _ := res.LastInsertId()
+
+	insertJob := func(name string) int64 {
+		res, err := db.ExecContext(ctx, `INSERT INTO jobs (pipeline_id, name) VALUES (?, ?)`, ppID, name)
+		require.NoError(t, err)
+		id, _ := res.LastInsertId()
+		return id
+	}
+	trainID := insertJob("train")
+	otherID := insertJob("other")
+
+	// Oldest first: build 2 is still running, build 3 waits in the queue.
+	statuses := []string{"succeeded", "started", "pending", "failed", "cancelled", "succeeded", "failed"}
+	var buildIDs []int64
+	for i, st := range statuses {
+		res, err := db.ExecContext(ctx, `INSERT INTO builds (job_id, status, build_number) VALUES (?, ?, ?)`, trainID, st, fmt.Sprint(i+1))
+		require.NoError(t, err)
+		id, _ := res.LastInsertId()
+		buildIDs = append(buildIDs, id)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO builds (job_id, status, build_number) VALUES (?, 'succeeded', '1')`, otherID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO build_get_versions (build_id, step_name, version_id) VALUES (?, 'repo', 1)`, buildIDs[0])
+	require.NoError(t, err)
+
+	br := mysql.NewBuildRepository(db, mysql.Mem)
+
+	numbers := func(job string) []string {
+		bs, err := br.Filter(ctx, "main", "keep-pipe", job, nil, nil, 100, nil)
+		require.NoError(t, err)
+		var ns []string
+		for _, b := range bs {
+			ns = append(ns, b.BuildNumber)
+		}
+		return ns
+	}
+
+	t.Run("GIVEN fewer builds than keep WHEN pruning THEN nothing is deleted", func(t *testing.T) {
+		n, err := br.DeleteOldFinished(ctx, "main", "keep-pipe", "train", 7)
+		require.NoError(t, err)
+		assert.Zero(t, n)
+		assert.Len(t, numbers("train"), 7)
+	})
+
+	t.Run("GIVEN seven builds WHEN keeping three THEN older finished builds go and active ones stay", func(t *testing.T) {
+		n, err := br.DeleteOldFinished(ctx, "main", "keep-pipe", "train", 3)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), n)
+		assert.Equal(t, []string{"7", "6", "5", "3", "2"}, numbers("train"))
+		assert.Equal(t, []string{"1"}, numbers("other"), "other jobs keep their builds")
+
+		var refs int
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM build_get_versions WHERE build_id = ?`, buildIDs[0]).Scan(&refs))
+		assert.Zero(t, refs, "get versions of a deleted build go with it")
+	})
+
+	t.Run("GIVEN an unknown job WHEN pruning THEN nothing is deleted", func(t *testing.T) {
+		n, err := br.DeleteOldFinished(ctx, "main", "keep-pipe", "nope", 1)
+		require.NoError(t, err)
+		assert.Zero(t, n)
+	})
+}

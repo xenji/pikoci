@@ -416,6 +416,39 @@ func (r *BuildRepository) Delete(ctx context.Context, tc, pn, jn string, buildNu
 	return nil
 }
 
+func (r *BuildRepository) DeleteOldFinished(ctx context.Context, tc, pn, jn string, keep int) (int64, error) {
+	// The newest build beyond the kept ones; it and every older build may go.
+	// Two statements, as MySQL refuses a DELETE whose subquery reads the same table.
+	var jobID, cutoffID uint32
+	err := r.querier.QueryRowContext(ctx, `
+		SELECT b.job_id, b.id
+		FROM builds AS b
+		JOIN jobs AS j ON b.job_id = j.id
+		JOIN pipelines AS p ON j.pipeline_id = p.id
+		JOIN teams AS t ON p.team_id = t.id
+		WHERE t.canonical = ? AND p.canonical = ? AND j.name = ?
+		ORDER BY b.id DESC
+		LIMIT 1 OFFSET ?
+	`, tc, pn, jn, keep).Scan(&jobID, &cutoffID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to find the oldest kept build: %w", err)
+	}
+
+	res, err := r.querier.ExecContext(ctx, `
+		DELETE
+		FROM builds
+		WHERE job_id = ? AND id <= ?
+		  AND status NOT IN ('started', 'pending', 'waiting_for_approval')
+	`, jobID, cutoffID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete old builds: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 func (r *BuildRepository) InsertGetVersion(ctx context.Context, tc, pn, jn string, buildID uint32, stepName string, versionID uint32) error {
 	_, err := r.querier.ExecContext(ctx, `
 		INSERT OR IGNORE INTO build_get_versions(build_id, step_name, version_id)

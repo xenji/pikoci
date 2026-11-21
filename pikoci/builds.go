@@ -86,6 +86,7 @@ func (q *PikoCI) CreateJobBuild(ctx context.Context, tc, pc, jn string, b build.
 	if jErr == nil {
 		q.supersedeOlderBuilds(ctx, tc, pc, jn, j, b.ID)
 	}
+	q.pruneOldBuilds(ctx, tc, pc, jn)
 
 	if b.Status != build.WaitingForApproval {
 		q.Notifier.Notify()
@@ -457,6 +458,7 @@ func (q *PikoCI) CreateRetryJobBuild(ctx context.Context, tc, pc, jn, parentBuil
 	}
 
 	q.supersedeOlderBuilds(ctx, tc, pc, jn, j, b.ID)
+	q.pruneOldBuilds(ctx, tc, pc, jn)
 
 	return &b, nil
 }
@@ -581,6 +583,23 @@ func (q *PikoCI) cancelOlderBuilds(ctx context.Context, tc, pc, jn string, newBu
 		}
 		q.logger.Info("cancelled older build",
 			"pipeline", pc, "job", jn, "build_number", ob.BuildNumber, "pending_only", pendingOnly)
+	}
+}
+
+// pruneOldBuilds deletes the job's finished builds beyond the newest KeepBuilds
+// (--keep-builds). Zero keeps every build. A failure is logged: the new build
+// stands either way.
+func (q *PikoCI) pruneOldBuilds(ctx context.Context, tc, pc, jn string) {
+	if q.KeepBuilds <= 0 {
+		return
+	}
+	n, err := q.Builds.DeleteOldFinished(ctx, tc, pc, jn, q.KeepBuilds)
+	if err != nil {
+		q.logger.Error("failed to delete old builds", "pipeline", pc, "job", jn, "error", err)
+		return
+	}
+	if n > 0 {
+		q.logger.Info("deleted old builds", "pipeline", pc, "job", jn, "count", n, "keep", q.KeepBuilds)
 	}
 }
 
@@ -835,6 +854,7 @@ func (q *PikoCI) evaluateJobDownstream(ctx context.Context, tc, pn, completedJob
 	}
 	if triggered {
 		q.supersedeOlderBuilds(ctx, tc, pn, j.Name, j, createdBuildID)
+		q.pruneOldBuilds(ctx, tc, pn, j.Name)
 	}
 	if triggered && j.ApproveLabel == "" {
 		q.Notifier.Notify()

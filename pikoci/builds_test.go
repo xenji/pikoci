@@ -2,6 +2,7 @@ package pikoci_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1479,6 +1480,58 @@ func TestCreateJobBuild_NotInterruptible_KeepsOlderBuilds(t *testing.T) {
 	b, err := s.S.CreateJobBuild(ctx, "main", "my-pipeline", "my-job", build.Build{})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(5), b.ID)
+}
+
+func TestCreateJobBuild_KeepBuilds_DeletesOldBuilds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	s := newService(ctrl)
+	s.P.KeepBuilds = 200
+	ctx := context.TODO()
+
+	s.Jobs.EXPECT().Find(ctx, "main", "my-pipeline", "my-job").
+		Return(&job.Job{Name: "my-job"}, nil)
+	s.Builds.EXPECT().Create(ctx, "main", "my-pipeline", "my-job", gomock.Any()).
+		Return(uint32(5), "5", nil)
+	s.Builds.EXPECT().DeleteOldFinished(ctx, "main", "my-pipeline", "my-job", 200).
+		Return(int64(3), nil)
+
+	_, err := s.S.CreateJobBuild(ctx, "main", "my-pipeline", "my-job", build.Build{})
+	require.NoError(t, err)
+}
+
+func TestCreateJobBuild_KeepBuilds_DeleteFailureKeepsNewBuild(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	s := newService(ctrl)
+	s.P.KeepBuilds = 200
+	ctx := context.TODO()
+
+	s.Jobs.EXPECT().Find(ctx, "main", "my-pipeline", "my-job").
+		Return(&job.Job{Name: "my-job"}, nil)
+	s.Builds.EXPECT().Create(ctx, "main", "my-pipeline", "my-job", gomock.Any()).
+		Return(uint32(5), "5", nil)
+	s.Builds.EXPECT().DeleteOldFinished(ctx, "main", "my-pipeline", "my-job", 200).
+		Return(int64(0), errors.New("database is locked"))
+
+	b, err := s.S.CreateJobBuild(ctx, "main", "my-pipeline", "my-job", build.Build{})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(5), b.ID)
+}
+
+func TestCreateRetryJobBuild_KeepBuilds_DeletesOldBuilds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	s := newService(ctrl)
+	s.P.KeepBuilds = 200
+	ctx := context.TODO()
+
+	s.Jobs.EXPECT().Find(ctx, "main", "my-pipeline", "my-job").
+		Return(&job.Job{Name: "my-job"}, nil)
+	s.Builds.EXPECT().CreateRetry(ctx, "main", "my-pipeline", "my-job", "3", gomock.Any()).
+		Return(uint32(10), "3.1", nil)
+	s.Builds.EXPECT().DeleteOldFinished(ctx, "main", "my-pipeline", "my-job", 200).
+		Return(int64(0), nil)
+
+	_, err := s.S.CreateRetryJobBuild(ctx, "main", "my-pipeline", "my-job", "3", build.Build{})
+	require.NoError(t, err)
 }
 
 func TestCreateJobBuild_SquashPending_CancelsOnlyOlderPending(t *testing.T) {

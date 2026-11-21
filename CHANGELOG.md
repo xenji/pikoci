@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`--keep-builds` server flag**: keeps the newest N builds of each job and deletes older finished ones with their logs when a new build is created, so a job on a frequent trigger does not grow the database without bound. `0` (default) keeps every build.
 - **`squash_pending` on jobs**: when `true`, a new build cancels the job's older pending builds, so a job with a frequent trigger and a long run (e.g. `cron` every minute) does not pile up a queue; running builds are kept.
 - **Default check interval**: `--default-check-interval` sets the check schedule for resources with no `check_interval`, so busy servers can poll less often. `cron` resources keep `@every 1m`, and the API returns the schedule in force as `effective_check_interval`. ([#719](https://github.com/PikoCI/pikoci/issues/719))
 

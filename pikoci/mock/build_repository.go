@@ -177,6 +177,21 @@ func (mr *BuildRepositoryMockRecorder) Delete(ctx, tc, pn, jn, buildNumber any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*BuildRepository)(nil).Delete), ctx, tc, pn, jn, buildNumber)
 }
 
+// DeleteOldFinished mocks base method.
+func (m *BuildRepository) DeleteOldFinished(ctx context.Context, tc, pn, jn string, keep int) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOldFinished", ctx, tc, pn, jn, keep)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteOldFinished indicates an expected call of DeleteOldFinished.
+func (mr *BuildRepositoryMockRecorder) DeleteOldFinished(ctx, tc, pn, jn, keep any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldFinished", reflect.TypeOf((*BuildRepository)(nil).DeleteOldFinished), ctx, tc, pn, jn, keep)
+}
+
 // FailStartedBuilds mocks base method.
 func (m *BuildRepository) FailStartedBuilds(ctx context.Context, reason string) (int, error) {
 	m.ctrl.T.Helper()

@@ -43,4 +43,6 @@ type Config struct {
 	SessionLifetime string `mapstructure:"session-lifetime"`
 
 	DefaultCheckInterval string `mapstructure:"default-check-interval"`
+
+	KeepBuilds int `mapstructure:"keep-builds"`
 }
